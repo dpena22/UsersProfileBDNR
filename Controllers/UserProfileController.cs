@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
 using Dominio;
 using System.Text.Json;
@@ -25,11 +24,10 @@ namespace UsersProfileBDNR.Controllers
 
             _accounts = db.GetCollection<UserAccount>("UserAccounts");
             _profiles = db.GetCollection<UserProfile>("UserProfiles");
-
             _cache = redis.GetDatabase();
         }
 
-
+        // ---------------------- CREATE USER ----------------------
         [HttpPost("create")]
         public async Task<IActionResult> CreateUser([FromBody] CreateUserDTO dto)
         {
@@ -46,14 +44,13 @@ namespace UsersProfileBDNR.Controllers
             return Ok(response);
         }
 
-
+        // ---------------------- GET USER ----------------------
         [HttpGet("{userId}")]
         public async Task<IActionResult> GetUser(string userId)
         {
             string redisKey = $"user:{userId}:summary";
 
             var cached = await _cache.StringGetAsync(redisKey);
-
             if (cached.HasValue)
             {
                 var dto = JsonSerializer.Deserialize<UserResponseDTO>(cached!);
@@ -67,13 +64,76 @@ namespace UsersProfileBDNR.Controllers
                 return NotFound($"No user found with id {userId}");
 
             var response = BuildUserResponse(account, profile);
-
             var json = JsonSerializer.Serialize(response);
+
             await _cache.StringSetAsync(redisKey, json, TimeSpan.FromSeconds(60));
 
             return Ok(response);
         }
 
+        // ---------------------- SUMMARY FOR RECOMMENDER ----------------------
+        [HttpGet("{userId}/summary-for-recommender")]
+        public async Task<IActionResult> GetSummaryForRecommender(string userId)
+        {
+            var profile = await _profiles.Find(p => p.UserId == userId).FirstOrDefaultAsync();
+
+            if (profile == null)
+                return NotFound($"No profile found for user {userId}");
+
+            var extra = profile.Extra?.AsBsonDocument ?? new BsonDocument();
+
+            var preferencesDoc = extra.Contains("preferences")
+                ? extra["preferences"].AsBsonDocument
+                : new BsonDocument();
+
+            var tagsArray = preferencesDoc.Contains("content_tags")
+                ? preferencesDoc["content_tags"].AsBsonArray
+                : new BsonArray();
+
+            var contentTags = tagsArray
+                .Where(t => t.IsBsonDocument)
+                .Select(t =>
+                {
+                    var d = t.AsBsonDocument;
+
+                    double weight = 0;
+                    if (d.Contains("weight"))
+                        double.TryParse(d["weight"].ToString(), out weight);
+
+                    return new
+                    {
+                        id = d.Contains("id") ? d["id"].ToString() : null,
+                        weight,
+                        source = d.Contains("source") ? d["source"].ToString() : null
+                    };
+                }).ToList();
+
+            var lang = profile.Languages?.FirstOrDefault();
+
+            var summary = new
+            {
+                user_id = profile.UserId,
+                display_name = profile.DisplayName,
+                language = lang?.Code,
+                course_id = lang != null ? $"{lang.Code}_es" : null,
+                level = lang?.Level,
+                xp = lang?.XP,
+                current_streak = profile.Streak?.CurrentStreak,
+                last_practice_at = profile.Streak?.LastUpdated?.ToUniversalTime(),
+                plus_active = profile.PlusStatus?.IsActive,
+
+                preferences = new
+                {
+                    content_tags = contentTags
+                }
+            };
+
+            return Ok(summary);
+        }
+
+        // ==================================================================
+        // -------------------------- MAPPERS -------------------------------
+        // ==================================================================
 
         private UserAccount MapToAccount(CreateUserDTO dto, string userId)
         {
@@ -84,24 +144,27 @@ namespace UsersProfileBDNR.Controllers
                 Email = dto.Email,
                 TwoFactorEnabled = dto.TwoFactorEnabled,
 
-                Privacy = dto.Privacy != null ? new PrivacySettings
-                {
-                    ShowProfile = dto.Privacy.ShowProfile,
-                    ShowFollowers = dto.Privacy.ShowFollowers,
-                    ShowActivity = dto.Privacy.ShowActivity
-                } : new PrivacySettings(),
+                Privacy = dto.Privacy != null
+                    ? new PrivacySettings
+                    {
+                        ShowProfile = dto.Privacy.ShowProfile,
+                        ShowFollowers = dto.Privacy.ShowFollowers,
+                        ShowActivity = dto.Privacy.ShowActivity
+                    }
+                    : new PrivacySettings(),
 
-                Notifications = dto.Notifications != null ? new NotificationSettings
-                {
-                    EmailNotifications = dto.Notifications.EmailNotifications,
-                    PushNotifications = dto.Notifications.PushNotifications,
-                    Extra = DeserializeExtra(dto.Notifications.Extra)
-                } : new NotificationSettings(),
+                Notifications = dto.Notifications != null
+                    ? new NotificationSettings
+                    {
+                        EmailNotifications = dto.Notifications.EmailNotifications,
+                        PushNotifications = dto.Notifications.PushNotifications,
+                        Extra = DeserializeExtra(dto.Notifications.Extra)
+                    }
+                    : new NotificationSettings(),
 
                 Extra = DeserializeExtra(dto.AccountExtra)
             };
         }
-
 
         private UserProfile MapToProfile(CreateUserDTO dto, string userId)
         {
@@ -119,38 +182,44 @@ namespace UsersProfileBDNR.Controllers
                     Active = l.Active
                 }).ToList(),
 
-                Streak = dto.Streak != null ? new StreakInfo
-                {
-                    CurrentStreak = dto.Streak.CurrentStreak,
-                    MaxStreak = dto.Streak.MaxStreak,
-                    LastUpdated = dto.Streak.LastUpdated ?? DateTime.UtcNow
-                } : new StreakInfo(),
+                Streak = dto.Streak != null
+                    ? new StreakInfo
+                    {
+                        CurrentStreak = dto.Streak.CurrentStreak,
+                        MaxStreak = dto.Streak.MaxStreak,
+                        LastUpdated = dto.Streak.LastUpdated ?? DateTime.UtcNow
+                    }
+                    : new StreakInfo(),
 
                 TotalXP = dto.TotalXP,
                 Achievements = dto.Achievements,
                 Friends = dto.Friends,
                 Followers = dto.Followers,
 
-                PlusStatus = dto.PlusStatus != null ? new DuolingoPlusStatus
-                {
-                    IsActive = dto.PlusStatus.IsActive,
-                    Expiration = dto.PlusStatus.Expiration,
-                    Extra = DeserializeExtra(dto.PlusStatus.Extra)
-                } : new DuolingoPlusStatus(),
+                PlusStatus = dto.PlusStatus != null
+                    ? new DuolingoPlusStatus
+                    {
+                        IsActive = dto.PlusStatus.IsActive,
+                        Expiration = dto.PlusStatus.Expiration,
+                        Extra = DeserializeExtra(dto.PlusStatus.Extra)
+                    }
+                    : new DuolingoPlusStatus(),
 
                 Extra = DeserializeExtra(dto.ProfileExtra)
             };
         }
 
-
         private BsonDocument DeserializeExtra(object? extra)
         {
-            if (extra == null) return new BsonDocument();
+            if (extra == null)
+                return new BsonDocument();
+
+            if (extra is BsonDocument bson)
+                return bson;
 
             var json = JsonSerializer.Serialize(extra);
-            return BsonSerializer.Deserialize<BsonDocument>(json);
+            return BsonDocument.Parse(json);
         }
-
 
         private UserResponseDTO BuildUserResponse(UserAccount? account, UserProfile? profile)
         {
@@ -163,7 +232,7 @@ namespace UsersProfileBDNR.Controllers
                     Username = account.Username,
                     Email = account.Email,
                     TwoFactorEnabled = account.TwoFactorEnabled,
-                    Extra = account.Extra.ToPlainObject()
+                    Extra = account.Extra?.ToPlainObject()
                 } : null,
 
                 Profile = profile != null ? new ProfileResponseDTO
@@ -190,7 +259,7 @@ namespace UsersProfileBDNR.Controllers
                     Friends = profile.Friends,
                     Followers = profile.Followers,
                     PlusActive = profile.PlusStatus?.IsActive,
-                    Extra = profile.Extra.ToPlainObject()
+                    Extra = profile.Extra?.ToPlainObject()
                 } : null
             };
         }

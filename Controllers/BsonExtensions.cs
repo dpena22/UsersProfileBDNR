@@ -1,14 +1,13 @@
 ﻿using MongoDB.Bson;
-using System.Text.Json;
 
 public static class BsonExtensions
 {
-    public static object ToPlainObject(this BsonDocument bson)
-    {
-        if (bson == null) return new { };
+    public static BsonDocument Doc(this BsonValue v)
+        => v != null && v.IsBsonDocument ? v.AsBsonDocument : new BsonDocument();
 
-        string json = bson.ToJson();
+    public static BsonArray Arr(this BsonValue v)
+        => v != null && v.IsBsonArray ? v.AsBsonArray : new BsonArray();
 
-        return JsonSerializer.Deserialize<object>(json)!;
-    }
+    public static object ToPlainObject(this BsonDocument doc)
+        => BsonTypeMapper.MapToDotNetValue(doc);
 }
