@@ -41,11 +41,6 @@ dotnet --version
 
 ### **2. Visual Studio 2022**
 
-Workloads recomendados:
-
-- ASP.NET and web development  
-- .NET desktop development  
-
 ---
 
 ### **3. MongoDB (instalación local)**
