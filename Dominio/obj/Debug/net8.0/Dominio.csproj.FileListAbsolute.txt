@@ -1,0 +1,12 @@
+C:\Users\denis\source\repos\Dominio\bin\Debug\net8.0\Dominio.deps.json
+C:\Users\denis\source\repos\Dominio\bin\Debug\net8.0\Dominio.dll
+C:\Users\denis\source\repos\Dominio\bin\Debug\net8.0\Dominio.pdb
+C:\Users\denis\source\repos\Dominio\obj\Debug\net8.0\Dominio.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\denis\source\repos\Dominio\obj\Debug\net8.0\Dominio.AssemblyInfoInputs.cache
+C:\Users\denis\source\repos\Dominio\obj\Debug\net8.0\Dominio.AssemblyInfo.cs
+C:\Users\denis\source\repos\Dominio\obj\Debug\net8.0\Dominio.csproj.CoreCompileInputs.cache
+C:\Users\denis\source\repos\Dominio\obj\Debug\net8.0\Dominio.dll
+C:\Users\denis\source\repos\Dominio\obj\Debug\net8.0\refint\Dominio.dll
+C:\Users\denis\source\repos\Dominio\obj\Debug\net8.0\Dominio.pdb
+C:\Users\denis\source\repos\Dominio\obj\Debug\net8.0\ref\Dominio.dll
+C:\Users\denis\source\repos\Dominio\obj\Debug\net8.0\Dominio.csproj.AssemblyReference.cache
